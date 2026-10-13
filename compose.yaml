@@ -1,0 +1,91 @@
+# Compose de la DEFENSA. Solo descarga imagenes publicadas en GHCR (sin build).
+# Se levanta con dos comandos desde esta carpeta:
+#   docker compose -p equipo06 pull
+#   docker compose -p equipo06 up -d
+# Luego http://localhost:8080 muestra el asistente.
+#
+# Requiere un archivo .env con OWNER = la cuenta de GitHub donde estan las
+# imagenes (ver .env.example). Ningun servicio salvo el gateway publica puerto.
+name: anda
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-anda}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-anda}
+      POSTGRES_DB: ${POSTGRES_DB:-anda}
+    volumes:
+      - datos_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-anda} -d ${POSTGRES_DB:-anda}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    cpus: 0.5
+    mem_limit: 512m
+
+  carga:
+    image: ${REGISTRY:-ghcr.io}/${OWNER}/carga:${TAG:-ep2}
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-anda}:${POSTGRES_PASSWORD:-anda}@db:5432/${POSTGRES_DB:-anda}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    cpus: 0.5
+    mem_limit: 256m
+
+  ia:
+    image: ${REGISTRY:-ghcr.io}/${OWNER}/ia:${TAG:-ep2}
+    deploy:
+      replicas: 2
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    cpus: 0.75
+    mem_limit: 512m
+
+  dominio:
+    image: ${REGISTRY:-ghcr.io}/${OWNER}/dominio:${TAG:-ep2}
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-anda}:${POSTGRES_PASSWORD:-anda}@db:5432/${POSTGRES_DB:-anda}
+      GATEWAY_URL: http://gateway:8080
+    depends_on:
+      db:
+        condition: service_healthy
+      carga:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    cpus: 0.5
+    mem_limit: 384m
+
+  gateway:
+    image: ${REGISTRY:-ghcr.io}/${OWNER}/gateway:${TAG:-ep2}
+    ports:
+      - "8080:8080"
+    depends_on:
+      front:
+        condition: service_healthy
+      dominio:
+        condition: service_healthy
+      ia:
+        condition: service_healthy
+    cpus: 0.25
+    mem_limit: 128m
+
+  front:
+    image: ${REGISTRY:-ghcr.io}/${OWNER}/front:${TAG:-ep2}
+    cpus: 0.25
+    mem_limit: 64m
+
+volumes:
+  datos_db:
