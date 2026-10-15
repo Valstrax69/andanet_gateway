@@ -23,7 +23,7 @@ services:
       timeout: 3s
       retries: 10
     cpus: 0.5
-    mem_limit: 512m
+    mem_limit: 256m
 
   carga:
     image: ${REGISTRY:-ghcr.io}/${OWNER}/carga:${TAG:-ep2}
@@ -46,8 +46,8 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
-    cpus: 0.75
-    mem_limit: 512m
+    cpus: 0.5
+    mem_limit: 256m
 
   dominio:
     image: ${REGISTRY:-ghcr.io}/${OWNER}/dominio:${TAG:-ep2}
@@ -66,7 +66,7 @@ services:
       retries: 5
       start_period: 10s
     cpus: 0.5
-    mem_limit: 384m
+    mem_limit: 192m
 
   gateway:
     image: ${REGISTRY:-ghcr.io}/${OWNER}/gateway:${TAG:-ep2}
@@ -80,12 +80,12 @@ services:
       ia:
         condition: service_healthy
     cpus: 0.25
-    mem_limit: 128m
+    mem_limit: 64m
 
   front:
     image: ${REGISTRY:-ghcr.io}/${OWNER}/front:${TAG:-ep2}
     cpus: 0.25
-    mem_limit: 64m
+    mem_limit: 32m
 
 volumes:
   datos_db:
