@@ -54,6 +54,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-anda}:${POSTGRES_PASSWORD:-anda}@db:5432/${POSTGRES_DB:-anda}
       GATEWAY_URL: http://gateway:8080
+      # Bajo este valor de confianza el asistente deriva en vez de responder.
+      UMBRAL_CONFIANZA: ${UMBRAL_CONFIANZA:-0.55}
     depends_on:
       db:
         condition: service_healthy
