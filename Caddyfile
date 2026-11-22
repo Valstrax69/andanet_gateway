@@ -1,0 +1,21 @@
+# HTTPS para todo lo que entra desde internet (EP3 §2.4).
+#
+# Caddy pide y renueva solo el certificado de Let's Encrypt para DOMINIO, que en
+# la EC2 es <ip-elastica-con-guiones>.sslip.io. sslip.io resuelve cualquier
+# nombre con forma de IP: 3-85-10-20.sslip.io apunta a 3.85.10.20, asi que no
+# hay que comprar dominio.
+#
+# Con DOMINIO=localhost (ensayo en el notebook) Caddy usa un certificado propio
+# y el navegador avisa: es normal, no es un error.
+{$DOMINIO} {
+	encode gzip
+
+	# La IA y las rutas internas no se publican. Solo se llega a ellas desde la
+	# red de Docker, que es lo que exige el enunciado: el LLM y el clasificador
+	# nunca se invocan desde el navegador.
+	@interno path /api/ia/* /interno/* /metrics
+	respond @interno "No encontrado" 404
+
+	# Todo lo demas al gateway de EP2, que reparte entre front, dominio e ia
+	reverse_proxy gateway:8080
+}
