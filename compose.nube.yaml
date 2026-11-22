@@ -1,0 +1,87 @@
+# Lo que EP3 le agrega al sistema de EP2 cuando corre en la EC2.
+# NO reemplaza a compose.yaml: se suma. En la EC2 el .env trae la linea
+#     COMPOSE_FILE=compose.yaml:compose.nube.yaml
+# y desde ahi cualquier "docker compose ..." en esa carpeta usa los dos.
+#
+#   caddy     HTTPS con Let's Encrypt. El unico con puertos abiertos: 80 y 443
+#   rabbitmq  la cola de pedidos de texto para el LLM
+#   worker    consume la cola, llama a NVIDIA y devuelve el texto al dominio
+#   ia        pasa a invocar el endpoint de SageMaker (MOTOR=sagemaker)
+#   dominio   publica en la cola y exige la clave de API
+#
+# El gateway deja de publicarse al mundo con GATEWAY_BIND=127.0.0.1 en el .env:
+# asi Caddy por 443 es la unica entrada, sin necesitar !override (que pide una
+# version reciente de Compose).
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data      # el certificado. Si se pierde, Let's Encrypt lo emite de nuevo
+    depends_on:
+      gateway:
+        condition: service_started
+    cpus: 0.25
+    mem_limit: 64m
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    ports:
+      - "127.0.0.1:15672:15672"   # consola web solo por tunel SSH, no al mundo
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - cola:/var/lib/rabbitmq
+    cpus: 0.5
+    mem_limit: 256m
+    restart: unless-stopped
+
+  worker:
+    image: ${REGISTRY:-ghcr.io}/${OWNER}/worker:${TAG:-ep3}
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+      URL_DOMINIO: http://dominio:8000
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NVIDIA_MODEL: ${NVIDIA_MODEL:?falta NVIDIA_MODEL en el .env (el modelo que publico el docente en el foro)}
+      NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      NVIDIA_TIMEOUT: ${NVIDIA_TIMEOUT:-20}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      dominio:
+        condition: service_healthy
+    cpus: 0.25
+    mem_limit: 96m
+    restart: unless-stopped
+
+  ia:
+    environment:
+      # El clasificador deja de estar en la imagen y pasa al endpoint de
+      # SageMaker. Las credenciales salen del rol de la instancia (perfil
+      # LabInstanceProfile): no hay claves de AWS en ninguna parte.
+      MOTOR: ${MOTOR:-sagemaker}
+      ENDPOINT: ${ENDPOINT:-ep3-chatbot}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+      SAGEMAKER_TIMEOUT: ${SAGEMAKER_TIMEOUT:-10}
+
+  dominio:
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+      API_KEYS: ${API_KEYS:?falta API_KEYS en el .env}
+      LIMITE_POR_MINUTO: ${LIMITE_POR_MINUTO:-60}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  caddy_datos:
+  cola:

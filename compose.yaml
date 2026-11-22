@@ -73,7 +73,9 @@ services:
   gateway:
     image: ${REGISTRY:-ghcr.io}/${OWNER}/gateway:${TAG:-ep2}
     ports:
-      - "8080:8080"
+      # En local queda publicado; en la EC2 el .env pone GATEWAY_BIND=127.0.0.1
+      # para que la unica entrada desde internet sea Caddy por HTTPS.
+      - "${GATEWAY_BIND:-0.0.0.0}:8080:8080"
     depends_on:
       front:
         condition: service_healthy
