@@ -51,7 +51,11 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
       URL_DOMINIO: http://dominio:8000
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
-      NVIDIA_MODEL: ${NVIDIA_MODEL:?falta NVIDIA_MODEL en el .env (el modelo que publico el docente en el foro)}
+      # Sin modelo el worker arranca igual y lo dice en su log. Se eligio asi y
+      # no con ${NVIDIA_MODEL:?...} porque la prediccion no necesita NVIDIA: que
+      # falte el modelo del LLM no puede impedir que levante el resto del
+      # sistema. Es el mismo fail-soft que pide el enunciado, aplicado al arranque.
+      NVIDIA_MODEL: ${NVIDIA_MODEL:-}
       NVIDIA_BASE_URL: ${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}
       NVIDIA_TIMEOUT: ${NVIDIA_TIMEOUT:-20}
     depends_on:
